@@ -1,0 +1,7 @@
+apiVersion: egress.mapper.com/v1alpha1
+kind: EgressMapper
+metadata:
+  name: example-egressmapper
+spec:
+  # Add fields here
+  size: 3

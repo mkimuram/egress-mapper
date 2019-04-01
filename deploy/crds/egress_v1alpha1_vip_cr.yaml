@@ -1,0 +1,7 @@
+apiVersion: egress.mapper.com/v1alpha1
+kind: Vip
+metadata:
+  name: example-vip
+spec:
+  # Add fields here
+  size: 3
