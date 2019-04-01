@@ -1,7 +1,9 @@
 apiVersion: egress.mapper.com/v1alpha1
 kind: Egress
 metadata:
-  name: example-egress
+  name: example-pod1-egress
 spec:
-  # Add fields here
-  size: 3
+  ip: 192.168.122.222
+  kind: pod
+  namespace: default
+  name: pod1

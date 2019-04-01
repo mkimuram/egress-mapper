@@ -3,5 +3,5 @@ kind: EgressMapper
 metadata:
   name: example-egressmapper
 spec:
-  # Add fields here
-  size: 3
+  KeepalivedVIPImage: k8s.gcr.io/kube-keepalived-vip:0.11
+  KubeEgressImage: ssheehy/kube-egress:0.3.1

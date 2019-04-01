@@ -2,9 +2,12 @@ package egressmapper
 
 import (
 	"context"
+	"fmt"
 
 	egressv1alpha1 "github.com/mkimuram/egress-mapper/pkg/apis/egress/v1alpha1"
 
+	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,52 +103,314 @@ func (r *ReconcileEgressMapper) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, err
 	}
 
-	// Define a new Pod object
-	pod := newPodForCR(instance)
+	reqLogger.Info(fmt.Sprintf("instance: %+v", instance))
+	reqLogger.Info(fmt.Sprintf("Keepalived-vip image name and version: %s", instance.Spec.KeepalivedVIPImage))
+	reqLogger.Info(fmt.Sprintf("Kube-egress image name and version: %s", instance.Spec.KubeEgressImage))
 
-	// Set EgressMapper instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
+	// Sync keepalived-vip daemonset
+	if err := syncKeepAlivedVip(r, instance, reqLogger); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		// Pod created successfully - don't requeue
-		return reconcile.Result{}, nil
-	} else if err != nil {
+	// Sync kube-egress daemonset
+	if err := syncKubeEgress(r, instance, reqLogger); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Pod already exists - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
 	return reconcile.Result{}, nil
 }
 
-// newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *egressv1alpha1.EgressMapper) *corev1.Pod {
-	labels := map[string]string{
-		"app": cr.Name,
+func syncKeepAlivedVip(r *ReconcileEgressMapper, cr *egressv1alpha1.EgressMapper, reqLogger logr.Logger) error {
+	// Define new keepalived-vip daemonset
+	keepAlivedVipDS := newKeepAlivedVipDSForCR(cr)
+
+	// Set EgressMapper instance as the owner and controller
+	if err := controllerutil.SetControllerReference(cr, keepAlivedVipDS, r.scheme); err != nil {
+		return err
 	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
-			Namespace: cr.Namespace,
-			Labels:    labels,
+
+	// Check if keepalived-vip DaemonSet already exists
+	found := &appsv1.DaemonSet{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: keepAlivedVipDS.Name, Namespace: keepAlivedVipDS.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new keepalived-vip daemonset")
+		err = r.client.Create(context.TODO(), keepAlivedVipDS)
+		if err != nil {
+			reqLogger.Info("Creating a new keepalived-vip daemonset fails")
+			return err
+		}
+
+		// keepalived-vip daemonSet created successfully - don't requeue
+		return nil
+	} else if err != nil {
+		reqLogger.Info("Getting keepalived-vip daemonset fails")
+		return err
+	}
+
+	// keepalived-vip daemonSet already exists - don't requeue
+	reqLogger.Info("Skip reconcile: keepalived-vip daemonSet. Daemonset already exists.")
+	return nil
+}
+
+func syncKubeEgress(r *ReconcileEgressMapper, cr *egressv1alpha1.EgressMapper, reqLogger logr.Logger) error {
+	// Define new kube-egress daemonset
+	kubeEgressDS := newKubeEgressDSForCR(cr)
+
+	// Set EgressMapper instance as the owner and controller
+	if err := controllerutil.SetControllerReference(cr, kubeEgressDS, r.scheme); err != nil {
+		return err
+	}
+
+	// Check if kube-egress DaemonSet already exists
+	found := &appsv1.DaemonSet{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: kubeEgressDS.Name, Namespace: kubeEgressDS.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new kube-egress daemonset")
+		err = r.client.Create(context.TODO(), kubeEgressDS)
+		if err != nil {
+			reqLogger.Info("Creating a new kube-egress daemonset fails")
+			return err
+		}
+
+		// kube-egress daemonSet created successfully - don't requeue
+		return nil
+	} else if err != nil {
+		reqLogger.Info("Getting kube-egress daemonset fails")
+		return err
+	}
+
+	// keepalived-vip daemonSet already exists - don't requeue
+	reqLogger.Info("Skip reconcile: kube-egress daemonSet. Daemonset already exists.")
+	return nil
+}
+
+// newKeepAlivedVipDSForCR returns a keepalived daemonset with the same name/namespace as the cr
+func newKeepAlivedVipDSForCR(cr *egressv1alpha1.EgressMapper) *appsv1.DaemonSet {
+	namespace := "default"
+	dsName := "kube-keepalived-vip"
+	saName := "kube-keepalived-vip"
+	containerName := "kube-keepalived-vip"
+	// TODO: fix this to set image version from spec
+	//image := cr.Spec.KeepalivedVIPImage
+	image := "k8s.gcr.io/kube-keepalived-vip:0.11"
+
+	imagePullPolicy := corev1.PullIfNotPresent
+	configmapName := "vip-configmap"
+
+	configmapArg := fmt.Sprintf("--services-configmap=%s/%s", namespace, configmapName)
+	isPrivileged := true
+	labels := map[string]string{"name": "kube-keepalived-vip"}
+
+	volumes := []corev1.Volume{
+		{
+			Name: "modules",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/lib/modules"},
+			},
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "busybox",
-					Image:   "busybox",
-					Command: []string{"sleep", "3600"},
+		{
+			Name: "dev",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/dev"},
+			},
+		},
+	}
+
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "modules",
+			MountPath: "/lib/modules",
+			ReadOnly:  true,
+		},
+		{
+			Name:      "dev",
+			MountPath: "/dev",
+		},
+	}
+
+	env := []corev1.EnvVar{
+		{
+			Name: "POD_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.name",
+				},
+			},
+		},
+		{
+			Name: "POD_NAMESPACE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
+				},
+			},
+		},
+	}
+
+	container := corev1.Container{
+		Name:                     containerName,
+		Image:                    image,
+		ImagePullPolicy:          imagePullPolicy,
+		TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+		SecurityContext:          &corev1.SecurityContext{Privileged: &isPrivileged},
+		VolumeMounts:             volumeMounts,
+		Env:                      env,
+		Args:                     []string{configmapArg},
+	}
+
+	return &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      dsName,
+			Namespace: namespace,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels:      labels,
+				MatchExpressions: []metav1.LabelSelectorRequirement{},
+			},
+			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
+				Type: appsv1.OnDeleteDaemonSetStrategyType,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					HostNetwork:        true,
+					ServiceAccountName: saName,
+					RestartPolicy:      corev1.RestartPolicyAlways,
+					Containers:         []corev1.Container{container},
+					Volumes:            volumes,
+				},
+			},
+		},
+	}
+}
+
+// newKubeEgressDSForCR returns a kube-egress daemonset with the same name/namespace as the cr
+func newKubeEgressDSForCR(cr *egressv1alpha1.EgressMapper) *appsv1.DaemonSet {
+	namespace := "default"
+	dsName := "kube-egress"
+	containerName := "kube-egress"
+	// TODO: fix this to set image version from spec
+	//image := cr.Spec.KubeEgressImage
+	image := "ssheehy/kube-egress:0.3.1"
+	imagePullPolicy := corev1.PullIfNotPresent
+	isPrivileged := true
+	labels := map[string]string{"app": "kube-egress"}
+	directoryOrCreate := corev1.HostPathDirectoryOrCreate
+	fileOrCreate := corev1.HostPathFileOrCreate
+	podSubnet := "10.244.0.0/16"
+	serviceSubnet := "10.96.0.0/12"
+	interfaceName := "eth0"
+	updateInterval := "5"
+	vipRouteidMappings := "/etc/vip-routeid-mappings"
+	podipVipMappings := "/etc/podip-vip-mappings"
+	var terminationGracePeriodSeconds int64 = 10
+
+	args := []string{
+		fmt.Sprintf("--pod-subnet=%s", podSubnet),
+		fmt.Sprintf("--service-subnet=%s", serviceSubnet),
+		fmt.Sprintf("--interface=%s", interfaceName),
+		fmt.Sprintf("--update-interval=%s", updateInterval),
+		fmt.Sprintf("--vip-routeid-mappings=%s", vipRouteidMappings),
+		fmt.Sprintf("--podip-vip-mappings=%s", podipVipMappings),
+	}
+
+	volumes := []corev1.Volume{
+		{
+			Name: "routing-tables",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/etc/iproute2/rt_tables.d/",
+					Type: &directoryOrCreate},
+			},
+		},
+		{
+			Name: "xtables-lock",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/run/xtables.lock",
+					Type: &fileOrCreate},
+			},
+		},
+		{
+			Name: "vip-routeid-mappings",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "vip-routeid-mappings",
+					},
+				},
+			},
+		},
+		{
+			Name: "podip-vip-mappings",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "podip-vip-mappings",
+					},
+				},
+			},
+		},
+	}
+
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "routing-tables",
+			MountPath: "/etc/iproute2/rt_tables.d/",
+			ReadOnly:  false,
+		},
+		{
+			Name:      "xtables-lock",
+			MountPath: "/run/xtables.lock",
+			ReadOnly:  false,
+		},
+		{
+			Name:      "vip-routeid-mappings",
+			MountPath: vipRouteidMappings,
+		},
+		{
+			Name:      "podip-vip-mappings",
+			MountPath: podipVipMappings,
+		},
+	}
+
+	container := corev1.Container{
+		Name:            containerName,
+		Image:           image,
+		ImagePullPolicy: imagePullPolicy,
+		SecurityContext: &corev1.SecurityContext{Privileged: &isPrivileged},
+		VolumeMounts:    volumeMounts,
+		Args:            args,
+	}
+
+	// TODO: add some more values, like rollingUpdate policy and resource limit, from original spec.
+	return &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      dsName,
+			Namespace: namespace,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels:      labels,
+				MatchExpressions: []metav1.LabelSelectorRequirement{},
+			},
+			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
+				Type: appsv1.RollingUpdateDaemonSetStrategyType,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					HostNetwork:                   true,
+					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+					Containers:                    []corev1.Container{container},
+					Volumes:                       volumes,
 				},
 			},
 		},
