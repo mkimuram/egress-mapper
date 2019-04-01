@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egress-mapper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: egress-mapper
+  template:
+    metadata:
+      labels:
+        name: egress-mapper
+    spec:
+      serviceAccountName: egress-mapper
+      containers:
+        - name: egress-mapper
+          # Replace this with the built image name
+          image: REPLACE_IMAGE
+          command:
+          - egress-mapper
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "egress-mapper"
