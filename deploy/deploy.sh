@@ -21,7 +21,6 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 do_create() {
         yamls | while read yaml;do 
                 kubectl create -f ${DIR}/${yaml}
-				sleep 1
         done
 }
 

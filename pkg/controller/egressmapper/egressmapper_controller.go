@@ -25,11 +25,6 @@ import (
 
 var log = logf.Log.WithName("controller_egressmapper")
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
 // Add creates a new EgressMapper Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -55,9 +50,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner EgressMapper
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
+	// Watch for changes to secondary resource DaemonSet and requeue the owner EgressMapper
+	err = c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &egressv1alpha1.EgressMapper{},
 	})
@@ -80,8 +74,6 @@ type ReconcileEgressMapper struct {
 
 // Reconcile reads that state of the cluster for a EgressMapper object and makes changes based on the state read
 // and what is in the EgressMapper.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
@@ -102,10 +94,6 @@ func (r *ReconcileEgressMapper) Reconcile(request reconcile.Request) (reconcile.
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-
-	reqLogger.Info(fmt.Sprintf("instance: %+v", instance))
-	reqLogger.Info(fmt.Sprintf("Keepalived-vip image name and version: %s", instance.Spec.KeepalivedVIPImage))
-	reqLogger.Info(fmt.Sprintf("Kube-egress image name and version: %s", instance.Spec.KubeEgressImage))
 
 	// Sync keepalived-vip daemonset
 	if err := syncKeepAlivedVip(r, instance, reqLogger); err != nil {
@@ -141,6 +129,7 @@ func syncKeepAlivedVip(r *ReconcileEgressMapper, cr *egressv1alpha1.EgressMapper
 		}
 
 		// keepalived-vip daemonSet created successfully - don't requeue
+		reqLogger.Info("Creating a new keepalived-vip daemonset succeeded")
 		return nil
 	} else if err != nil {
 		reqLogger.Info("Getting keepalived-vip daemonset fails")
@@ -173,6 +162,7 @@ func syncKubeEgress(r *ReconcileEgressMapper, cr *egressv1alpha1.EgressMapper, r
 		}
 
 		// kube-egress daemonSet created successfully - don't requeue
+		reqLogger.Info("Creating a new kube-egress daemonset succeeded")
 		return nil
 	} else if err != nil {
 		reqLogger.Info("Getting kube-egress daemonset fails")
@@ -190,9 +180,7 @@ func newKeepAlivedVipDSForCR(cr *egressv1alpha1.EgressMapper) *appsv1.DaemonSet 
 	dsName := "kube-keepalived-vip"
 	saName := "kube-keepalived-vip"
 	containerName := "kube-keepalived-vip"
-	// TODO: fix this to set image version from spec
-	//image := cr.Spec.KeepalivedVIPImage
-	image := "k8s.gcr.io/kube-keepalived-vip:0.11"
+	image := cr.Spec.KeepalivedVIPImage
 
 	imagePullPolicy := corev1.PullIfNotPresent
 	configmapName := "vip-configmap"
@@ -294,9 +282,7 @@ func newKubeEgressDSForCR(cr *egressv1alpha1.EgressMapper) *appsv1.DaemonSet {
 	namespace := "default"
 	dsName := "kube-egress"
 	containerName := "kube-egress"
-	// TODO: fix this to set image version from spec
-	//image := cr.Spec.KubeEgressImage
-	image := "ssheehy/kube-egress:0.3.1"
+	image := cr.Spec.KubeEgressImage
 	imagePullPolicy := corev1.PullIfNotPresent
 	isPrivileged := true
 	labels := map[string]string{"app": "kube-egress"}

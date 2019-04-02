@@ -3,5 +3,5 @@ kind: Vip
 metadata:
   name: example-vip
 spec:
-  Ip: 192.168.122.222
-  RouteID: 64
+  ip: 192.168.122.222
+  routeid: 64

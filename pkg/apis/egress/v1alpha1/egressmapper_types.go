@@ -13,8 +13,8 @@ type EgressMapperSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
-	KeepalivedVIPImage string `json:"keepalivedvipimage,omitempty"`
-	KubeEgressImage    string `json:"kubeegressimage,omitempty"`
+	KeepalivedVIPImage string `json:"KeepalivedVIPImage,omitempty"`
+	KubeEgressImage    string `json:"KubeEgressImage,omitempty"`
 }
 
 // EgressMapperStatus defines the observed state of EgressMapper
