@@ -409,7 +409,10 @@ func newKubeEgressDSForCR(cr *egressv1alpha1.EgressMapper) *appsv1.DaemonSet {
 }
 
 func getArgsForKubeEgressDS(cr *egressv1alpha1.EgressMapper) []string {
-	args := []string{}
+	args := []string{
+		"--vip-routeid-mappings=/etc/vip-routeid-mappings",
+		"--podip-vip-mappings=/etc/podip-vip-mappings",
+	}
 
 	if cr.Spec.PodSubnet != "" {
 		args = append(args, fmt.Sprintf("--pod-subnet=%s", cr.Spec.PodSubnet))
