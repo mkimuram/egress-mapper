@@ -15,6 +15,10 @@ type EgressMapperSpec struct {
 	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
 	KeepalivedVIPImage string `json:"KeepalivedVIPImage,omitempty"`
 	KubeEgressImage    string `json:"KubeEgressImage,omitempty"`
+	PodSubnet          string `json:"PodSubnet,omitempty"`
+	ServiceSubnet      string `json:"ServiceSubnet,omitempty"`
+	InterfaceName      string `json:"InterfaceName,omitempty"`
+	UpdateInterval     string `json:"UpdateInterval,omitempty"`
 }
 
 // EgressMapperStatus defines the observed state of EgressMapper

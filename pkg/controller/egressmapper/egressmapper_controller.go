@@ -288,22 +288,12 @@ func newKubeEgressDSForCR(cr *egressv1alpha1.EgressMapper) *appsv1.DaemonSet {
 	labels := map[string]string{"app": "kube-egress"}
 	directoryOrCreate := corev1.HostPathDirectoryOrCreate
 	fileOrCreate := corev1.HostPathFileOrCreate
-	podSubnet := "10.244.0.0/16"
-	serviceSubnet := "10.96.0.0/12"
-	interfaceName := "eth0"
-	updateInterval := "5"
 	vipRouteidMappings := "/etc/vip-routeid-mappings"
 	podipVipMappings := "/etc/podip-vip-mappings"
 	var terminationGracePeriodSeconds int64 = 10
 
-	args := []string{
-		fmt.Sprintf("--pod-subnet=%s", podSubnet),
-		fmt.Sprintf("--service-subnet=%s", serviceSubnet),
-		fmt.Sprintf("--interface=%s", interfaceName),
-		fmt.Sprintf("--update-interval=%s", updateInterval),
-		fmt.Sprintf("--vip-routeid-mappings=%s", vipRouteidMappings),
-		fmt.Sprintf("--podip-vip-mappings=%s", podipVipMappings),
-	}
+	// Update args with user specified values
+	args := getArgsForKubeEgressDS(cr)
 
 	volumes := []corev1.Volume{
 		{
@@ -401,4 +391,23 @@ func newKubeEgressDSForCR(cr *egressv1alpha1.EgressMapper) *appsv1.DaemonSet {
 			},
 		},
 	}
+}
+
+func getArgsForKubeEgressDS(cr *egressv1alpha1.EgressMapper) []string {
+	args := []string{}
+
+	if cr.Spec.PodSubnet != "" {
+		args = append(args, fmt.Sprintf("--pod-subnet=%s", cr.Spec.PodSubnet))
+	}
+	if cr.Spec.ServiceSubnet != "" {
+		args = append(args, fmt.Sprintf("--service-subnet=%s", cr.Spec.ServiceSubnet))
+	}
+	if cr.Spec.InterfaceName != "" {
+		args = append(args, fmt.Sprintf("--interface=%s", cr.Spec.InterfaceName))
+	}
+	if cr.Spec.UpdateInterval != "" {
+		args = append(args, fmt.Sprintf("--update-interval=%s", cr.Spec.UpdateInterval))
+	}
+
+	return args
 }
