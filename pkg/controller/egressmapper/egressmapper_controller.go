@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	egressv1alpha1 "github.com/mkimuram/egress-mapper/pkg/apis/egress/v1alpha1"
+	"github.com/mkimuram/egress-mapper/pkg/controller/utils"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -109,6 +110,12 @@ func (r *ReconcileEgressMapper) Reconcile(request reconcile.Request) (reconcile.
 }
 
 func syncKeepAlivedVip(r *ReconcileEgressMapper, cr *egressv1alpha1.EgressMapper, reqLogger logr.Logger) error {
+	// Ensure vip-configmap is available before keepalived-vip is created
+	// Get vip-configmap
+	if _, err := utils.GetOrCreateConfigMap(r.client, "vip-configmap", "default"); err != nil {
+		return err
+	}
+
 	// Define new keepalived-vip daemonset
 	keepAlivedVipDS := newKeepAlivedVipDSForCR(cr)
 
@@ -142,6 +149,14 @@ func syncKeepAlivedVip(r *ReconcileEgressMapper, cr *egressv1alpha1.EgressMapper
 }
 
 func syncKubeEgress(r *ReconcileEgressMapper, cr *egressv1alpha1.EgressMapper, reqLogger logr.Logger) error {
+	// Ensure podip-vip-mappings and vip-routeid-mappings are available before kube-egress is created
+	if _, err := utils.GetOrCreateConfigMap(r.client, "podip-vip-mappings", "default"); err != nil {
+		return err
+	}
+	if _, err := utils.GetOrCreateConfigMap(r.client, "vip-routeid-mappings", "default"); err != nil {
+		return err
+	}
+
 	// Define new kube-egress daemonset
 	kubeEgressDS := newKubeEgressDSForCR(cr)
 
