@@ -83,3 +83,21 @@ func createEgressData(cl client.Client, egressList *egressv1alpha1.EgressList) (
 
 	return egressData, nil
 }
+
+// IsEgressResource returns if the resource is managed as egress resource
+func IsEgressResource(cl client.Client, kind string, namespace string, name string) (bool, error) {
+	// Get list of egress
+	// TODO: Consider improving the way to query list of egresses that match the condition
+	egressList, err := getEgressList(cl)
+	if err != nil {
+		return false, err
+	}
+
+	for _, e := range egressList.Items {
+		if e.Spec.Kind == kind && e.Spec.Namespace == namespace && e.Spec.Name == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
