@@ -212,13 +212,6 @@ func newKeepAlivedVipDSForCR(cr *egressv1alpha1.EgressMapper) *appsv1.DaemonSet 
 					Path: "/lib/modules"},
 			},
 		},
-		{
-			Name: "dev",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: "/dev"},
-			},
-		},
 	}
 
 	volumeMounts := []corev1.VolumeMount{
@@ -227,10 +220,22 @@ func newKeepAlivedVipDSForCR(cr *egressv1alpha1.EgressMapper) *appsv1.DaemonSet 
 			MountPath: "/lib/modules",
 			ReadOnly:  true,
 		},
-		{
+	}
+
+	// Only mount /dev if cr.Spec.NeedMountDev is true.
+	// This is needed for cri-o will automatically bindmount /dev if running with Privileged mode
+	if cr.Spec.NeedMountDev {
+		volumes = append(volumes, corev1.Volume{
+			Name: "dev",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/dev"},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "dev",
 			MountPath: "/dev",
-		},
+		})
 	}
 
 	env := []corev1.EnvVar{
