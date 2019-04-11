@@ -5,7 +5,7 @@ metadata:
 spec:
   KeepalivedVIPImage: "k8s.gcr.io/kube-keepalived-vip:0.11"
   NeedMountDev: true
-  KubeEgressImage: "ssheehy/kube-egress:0.3.1"
+  KubeEgressImage: "ssheehy/kube-egress:0.4.0"
   PodSubnet: "10.244.0.0/16"
   ServiceSubnet: "10.96.0.0/12"
   InterfaceName: "eth0"

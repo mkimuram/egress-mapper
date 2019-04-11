@@ -16,7 +16,7 @@ spec:
       containers:
         - name: egress-mapper
           # Replace this with the built image name
-          image: quay.io/mkimuram/egress-mapper:latest
+          image: mkimuram/egress-mapper:latest
           command:
           - egress-mapper
           imagePullPolicy: IfNotPresent
